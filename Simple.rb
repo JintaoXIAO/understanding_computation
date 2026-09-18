@@ -11,6 +11,9 @@ class Number < Struct.new(:value)
   def evaluate(environment)
     self
   end
+  def to_ruby
+    "-> e { #{value.inspect} }"
+  end
 end
 
 class Boolean < Struct.new(:value)
@@ -25,6 +28,9 @@ class Boolean < Struct.new(:value)
   end
   def evaluate(environment)
     self
+  end
+  def to_ruby
+    "-> e { #{value.inspect} }"
   end
 end
 
@@ -43,6 +49,9 @@ class Variable < Struct.new(:name)
   end
   def evaluate(environment)
     environment[name]
+  end
+  def to_ruby
+    "-> e { e[#{name.inspect}] }"
   end
 end
 
@@ -68,6 +77,9 @@ class Add < Struct.new(:left, :right)
   def evaluate(environment)
     Number.new(left.evaluate(environment).value + right.evaluate(environment).value)
   end
+  def to_ruby
+    "-> e { (#{left.to_ruby}).call(e) + (#{right.to_ruby}).call(e) }"
+  end
 end
 
 class Multiply < Struct.new(:left, :right)
@@ -91,6 +103,9 @@ class Multiply < Struct.new(:left, :right)
   end
   def evaluate(environment)
     Number.new(left.evaluate(environment).value * right.evaluate(environment).value)
+  end
+  def to_ruby
+    "-> e { (#{left.to_ruby}).call(e) * (#{right.to_ruby}).call(e) }"
   end
 end
 
@@ -116,7 +131,9 @@ class LessThan < Struct.new(:left, :right)
   def evaluate(environment)
     Boolean.new(left.evaluate(environment).value < right.evaluate(environment).value)
   end
-
+  def to_ruby
+    "-> e { (#{left.to_ruby}).call(e) < (#{right.to_ruby}).call(e) }"
+  end
 end
 
 class DoNothing
@@ -134,6 +151,9 @@ class DoNothing
   end
   def evaluate(environment)
     environment
+  end
+  def to_ruby
+    '-> e { e }'
   end
 end
 
@@ -156,6 +176,9 @@ class Assign < Struct.new(:name, :expression)
   end
   def evaluate(environment)
     environment.merge({name => expression.evaluate(environment)})
+  end
+  def to_ruby
+    "-> e { e.merge({ #{name.inspect} => (#{expression.to_ruby}).call(e) }) }"
   end
 end
 
@@ -188,6 +211,12 @@ class If < Struct.new(:condition, :consequence, :alternative)
     when Boolean.new(false)
       alternative.evaluate(environment)
     end
+  end
+  def to_ruby
+    "-> e { if (#{condition.to_ruby}).call(e)" +
+    " then (#{consequence.to_ruby}).call(e)" +
+    " else (#{alternative.to_ruby}).call(e)" +
+    " end }"
   end
 end
 
@@ -226,6 +255,9 @@ class Sequence < Struct.new(:first, :second)
   def evaluate(environment)
     second.evaluate(first.evaluate(environment))
   end
+  def to_ruby
+    "-> e { (#{second.to_ruby}).call((#{first.to_ruby}).call(e)) }"
+  end
 end
 
 class While < Struct.new(:condition, :body)
@@ -249,19 +281,16 @@ class While < Struct.new(:condition, :body)
       environment
     end
   end
+  def to_ruby
+    "-> e {" +
+    " while (#{condition.to_ruby}).call(e); e = (#{body.to_ruby}).call(e); end;" +
+    " e" +
+    " }"
+  end
 end
+statement = While.new( LessThan.new(Variable.new(:x), Number.new(5)), Assign.new(:x, Multiply.new(Variable.new(:x), Number.new(3))) )
 
-cond = LessThan.new(Variable.new(:x), Number.new(5))
-body = Assign.new(:x, Multiply.new(Variable.new(:x), Number.new(3)))
-s = While.new(
-  cond,
-  body
-)
+p statement.to_ruby
 
-p s.evaluate({x: Number.new(1)})
-
-
-
-
-
-
+proc = eval(statement.to_ruby)
+p proc.call({x:1})
